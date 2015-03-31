@@ -1,0 +1,12 @@
+App = angular.module 'Advantage'
+
+<% if development? %>
+host = 'localhost'
+port = 10100
+<% else %>
+host = 'advantage.psiinteractive.com'
+port = 80
+<% end %>
+
+# Should do something about protocol here...
+App.constant 'MasterUrl', "http://#{host}\\:#{port}"

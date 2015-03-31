@@ -1,0 +1,12 @@
+#!/bin/sh
+
+# Potential ENV vars, defaults are set in advantage_server.app.src
+# SESSION_COOKIE (c_session)
+# PORT (10100)
+# CLIENT_DOMAIN (advantage.psiinteractive.com)
+
+erl \
+	-pa ebin \
+	-pa deps/*/ebin \
+	-config app \
+	-s advantage_server

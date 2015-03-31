@@ -1,0 +1,8 @@
+*.swp
+*.swo
+.*.un~
+deps
+ebin
+*.dump
+log
+.session.vim

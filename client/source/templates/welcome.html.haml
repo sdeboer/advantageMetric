@@ -1,0 +1,14 @@
+.content
+  .menu
+    %h2 Select Match
+
+    %form
+      .summoner
+        .name By Summoner:
+        .value
+          %input(type="text" ng-scope="summoner")
+
+      .random
+        .list From Random Feed:
+        .feed
+          %select(ng-options="randomList")

@@ -1,0 +1,17 @@
+{application, advantage_server,
+ [
+	{description, "Measuring LoL team advantage"},
+	{vsn, git},
+	{registered, [advantage_server_sup]},
+	{applications, [
+									kernel, stdlib, goldrush,
+									lager, syntax_tools, cowboy
+								 ]},
+	{mod, { advantage_server_app, []}},
+	{env, [
+				 {http_port, 10100},
+				 {session_cookie, <<"c_session">>},
+				 {advantage_client_domain, <<"advantage.psiinteractive.com">>}
+				]}
+ ]}.
+% vim: set filetype=erlang:
