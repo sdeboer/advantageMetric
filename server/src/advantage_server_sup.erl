@@ -15,6 +15,6 @@ start_link() ->
 init([]) ->
 	Children = [
 							?CHILD(persist),
-							?SUP(pubsub_sup)
+							?CHILD(riot)
 						 ],
 	{ok, { {one_for_one, 5, 10}, Children} }.
