@@ -44,12 +44,25 @@ match(Id, Timeline) ->
 
 handle_call({summoner, Name}, _F, S) ->
 	U = url("summoner/by-name", "v1.4", Name, S),
-	R = request(U),
+	N = list_to_binary(Name),
+
+	R = case request(U) of
+				{ok, [{N, Props}]} ->
+					proplists:get_value(<<"id">>, Props);
+				{error, C, V} -> {error, C, V}
+			end,
+
 	{reply, R, S};
 
 handle_call({matches, Id}, _F, S) ->
 	U = url("matchhistory", "v2.2", Id, S),
-	R = request(U),
+
+	R = case request(U) of
+				{ok, [{<<"matches">>, ML}]} ->
+					[ proplists:get_value(<<"matchId">>, X) || X <- ML ];
+				{error, C, V} -> {error, C, V}
+			end,
+
 	{reply, R, S};
 
 handle_call({match, Id, Timeline}, _F, S) ->
@@ -58,7 +71,10 @@ handle_call({match, Id, Timeline}, _F, S) ->
 				_ -> []
 			end,
 	U = url("match", "v2.2", Id, P, S),
-	R = request(U),
+	R = case request(U) of
+				{ok, M} -> M;
+				X -> X
+			end,
 	{reply, R, S}.
 
 request(Url) ->
