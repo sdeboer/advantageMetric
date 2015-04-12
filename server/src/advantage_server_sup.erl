@@ -15,6 +15,7 @@ start_link() ->
 init([]) ->
 	Children = [
 							?CHILD(persist),
-							?CHILD(riot)
+							?CHILD(riot),
+							?CHILD(objectives)
 						 ],
 	{ok, { {one_for_one, 5, 10}, Children} }.

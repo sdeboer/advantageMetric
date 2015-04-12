@@ -9,7 +9,7 @@
 				 summoner_id/1,
 				 matches_for_name/1,
 				 matches/1,
-				 match/1
+				 match/1, match/2
 				]).
 
 % gen_server API
@@ -30,7 +30,7 @@
 -define(PATH, "api/lol/").
 
 summoner_id(Name) ->
-	gen_server:call(?MODULE, {summoner, Name}).
+	gen_server:call(?MODULE, {summoner, string:to_lower(Name)}).
 
 matches_for_name(Name) -> matches( summoner_id(Name) ).
 
@@ -115,4 +115,3 @@ url(Request, Version, Arg, Params, S) ->
 
 url(Request, Version, Arg, S)->
 	url(Request, Version, Arg, [], S).
-
