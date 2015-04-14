@@ -7,7 +7,8 @@
 % client API
 -export([
 				 times/1,
-				 times_match/1, streaks/1
+				 times_match/1,
+				 streaks/1
 				]).
 
 % gen_server API
@@ -36,7 +37,27 @@
 					victims = []
 				 }).
 
+% Amount of time that needs to lapse before its another streak
 -define(STREAK_GAP, 20000).
+-define(URF_STREAK_GAP, 10000).
+
+% Amount of time before or after a streak that someone can be applying
+% positional pressure
+-define(PRESSURE_GAP, 10000).
+% And the radius they need to be in order to be considered pressuring
+% the streak
+-define(PRESSURE_RADIUS, 1500).
+
+-define(BLUE_TEAM, 100).
+-define(RED_TEAM, 200).
+
+% Worth Assesment
+-define(WARD_POINTS, 1).
+-define(WARD_KILL_POINTS, 2).
+-define(CHAMPION_POINTS, 3).
+-define(DRAGON_POINTS, 3).
+-define(BARON_POINTS, 5).
+-define(BUILDING_POINTS, 10).
 
 start_link() ->
 	gen_server:start_link({local, ?MODULE}, ?MODULE, [], []).
@@ -76,7 +97,7 @@ get_streaks(M) ->
 																						 partition_events(Pid, Participants);
 
 																					 Tid ->
-																						 Tid =:= 100
+																						 Tid =:= ?BLUE_TEAM
 																				 end
 																		 end, Times),
 
@@ -87,7 +108,7 @@ get_streaks(M) ->
 partition_events(Pid, [P | Rest]) ->
 	case proplists:get_value(<<"participantId">>, P) of
 		Pid ->
-			proplists:get_value(<<"teamId">>, P, undefined) =:= 100;
+			proplists:get_value(<<"teamId">>, P, undefined) =:= ?BLUE_TEAM;
 		_Pid ->
 			partition_events(Pid, Rest)
 	end.
@@ -116,7 +137,6 @@ find_streaks(T, [])->
 find_streaks(T, [S | Rest])->
 	New = T#time.stamp,
 	Diff = abs(New - S#streak.finish),
-	lager:debug("STREAK ~p, ~p, ~p", [S#streak.finish, New, New - S#streak.finish]),
 	if
 		Diff < ?STREAK_GAP ->
 
@@ -132,9 +152,11 @@ find_streaks(T, [S | Rest])->
 
 		true ->
 			Sprev = S#streak{
-								players = lists:usort( lists:flatten(S#streak.players) )
+								players = lists:usort( lists:flatten(S#streak.players) ),
+								positions = lists:filter( fun(X) -> X =/= undefined end, S#streak.positions)
 							 },
 			Snew = S#streak{
+							 score = T#time.score,
 							 start = T#time.stamp,
 							 finish = T#time.stamp,
 							 events = [T#time.type],
@@ -227,27 +249,27 @@ process_event(E, Acc) ->
 	Score = case proplists:get_value(<<"eventType">>, E, undefined) of
 						<<"WARD_PLACED">> -> 
 							Creator = proplists:get_value(<<"creatorId">>, E),
-							#time{type = ward_placed, score = 1, attackers = [Creator]};
+							#time{type = ward_placed, score = ?WARD_POINTS, attackers = [Creator]};
 
 						<<"WARD_KILL">> -> 
-							#time{type = ward_kill, score = 2, attackers = [Killer]};
+							#time{type = ward_kill, score = ?WARD_KILL_POINTS, attackers = [Killer]};
 
 						<<"CHAMPION_KILL">> -> 
 							Victim = proplists:get_value(<<"victimId">>, E),
-							#time{type = champion, score = 3, attackers = [Killer | Assists], victims = [Victim]};
+							#time{type = champion, score = ?CHAMPION_POINTS, attackers = [Killer | Assists], victims = [Victim]};
 
 						<<"ELITE_MONSTER_KILL">> -> 
 							case proplists:get_value(<<"monsterType">>, E, undefined) of
 								<<"BARON_NASHOR">> ->
-									#time{type = baron, score = 5, attackers = [Killer | Assists]};
+									#time{type = baron, score = ?BARON_POINTS, attackers = [Killer | Assists]};
 								<<"DRAGON">> ->
-									#time{type = dragon, score = 3, attackers = [Killer | Assists]};  % unless its the 5th dragon..maybe
+									#time{type = dragon, score = ?DRAGON_POINTS, attackers = [Killer | Assists]};
 								_ -> undefined
 							end;
 
 						<<"BUILDING_KILL">> -> 
 							Team = proplists:get_value(<<"teamId">>, E),
-							#time{type = building, score = 10, attackers = [Killer | Assists], team = Team};
+							#time{type = building, score = ?BUILDING_POINTS, attackers = [Killer | Assists], team = Team};
 
 						_ -> undefined
 					end,
@@ -256,7 +278,6 @@ process_event(E, Acc) ->
 		undefined -> Acc;
 
 		S ->
-			lager:debug("attacker ~p / ~p", [S#time.type, S#time.attackers]),
 			S2 = S#time{stamp = proplists:get_value(<<"timestamp">>, E),
 									position = proplists:get_value(<<"position">>, E)},
 			[S2 | Acc]
