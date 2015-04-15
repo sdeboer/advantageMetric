@@ -7,7 +7,6 @@
 % client API
 -export([
 				 times/1,
-				 times_match/1,
 				 streaks/1
 				]).
 
@@ -19,6 +18,7 @@
 				]).
 
 -record(streak, {
+					team,
 					start,
 					finish,
 					score = 0,
@@ -38,12 +38,12 @@
 				 }).
 
 % Amount of time that needs to lapse before its another streak
--define(STREAK_GAP, 20000).
--define(URF_STREAK_GAP, 10000).
+-define(STREAK_GAP, 0.33).
+-define(URF_STREAK_GAP, ?STREAK_GAP / 2).
 
 % Amount of time before or after a streak that someone can be applying
 % positional pressure
--define(PRESSURE_GAP, 10000).
+-define(PRESSURE_GAP, ?STREAK_GAP / 2).
 % And the radius they need to be in order to be considered pressuring
 % the streak
 -define(PRESSURE_RADIUS, 1500).
@@ -59,25 +59,18 @@
 -define(BARON_POINTS, 5).
 -define(BUILDING_POINTS, 10).
 
+-define(MIN(A), A / 1000 / 60).
+
 start_link() ->
 	gen_server:start_link({local, ?MODULE}, ?MODULE, [], []).
 
-times_match(Match) ->
+times(Match) ->
 	gen_server:call(?MODULE, {process, Match}).
 
 streaks(Match) ->
 	gen_server:call(?MODULE, {streaks, Match}).
 
-times(Mid) ->
-	gen_server:call(?MODULE, {times, Mid}).
-
 init(_Args) -> {ok, undefined}.
-
-handle_call({times, Mid}, _F, S) -> 
-	case riot:match(Mid, true) of
-		{error, C, V} -> {reply, {error, C, V}, S};
-		M -> {reply, process(M), S}
-	end;
 
 handle_call({process, Match}, _F, S) ->
 	{reply, process(Match), S};
@@ -89,6 +82,9 @@ get_streaks(M) ->
 	Timeline = proplists:get_value(<<"timeline">>, M),
 	Frames = proplists:get_value(<<"frames">>, Timeline, []),
 	Times = lists:foldl(fun process_frame/2, [], Frames),
+	T2 = lists:sort(fun(A,B) ->
+											A#time.stamp =< B#time.stamp
+									end, Times),
 	Participants = proplists:get_value(<<"participants">>, M),
 	{Atimes, Btimes} = lists:partition(fun(T) ->
 																				 case T#time.team of
@@ -99,11 +95,22 @@ get_streaks(M) ->
 																					 Tid ->
 																						 Tid =:= ?BLUE_TEAM
 																				 end
-																		 end, Times),
+																		 end, T2),
 
-	Astreaks = lists:foldl(fun find_streaks/2, [], Atimes),
-	Bstreaks = lists:foldl(fun find_streaks/2, [], Btimes),
-	[12, Astreaks, Bstreaks].
+	Astreaks = lists:foldl(
+							 fun(S, Acc)->
+									 find_streaks(S, Acc, ?BLUE_TEAM)
+									 end, [], Atimes),
+	As1 = lists:filtermap(fun streak_clean/1, Astreaks),
+	As2 = lists:sort(fun streak_sort/2, As1),
+
+	Bstreaks = lists:foldl(
+							 fun(S, Acc)->
+									 find_streaks(S, Acc, ?RED_TEAM)
+									 end, [], Btimes),
+	Bs1 = lists:filtermap(fun streak_clean/1, Bstreaks),
+	Bs2 = lists:sort(fun streak_sort/2, Bs1),
+	[Frames, As2, Bs2].
 
 partition_events(Pid, [P | Rest]) ->
 	case proplists:get_value(<<"participantId">>, P) of
@@ -114,18 +121,93 @@ partition_events(Pid, [P | Rest]) ->
 	end.
 
 process(M) ->
-	[Frames, Streaks] = get_streaks(M),
+	[Frames, Blue, Red] = get_streaks(M),
 	Players = proplists:get_value(<<"participantIdentities">>, M),
 	Participants = proplists:get_value(<<"participants">>, M),
 
 	Scores = [ process_player(P) || P <- Players ],
 	S2 = [ add_teams(Scores, P) || P <- Participants ],
+	TeamLookup = lists:map(
+								 fun(P) ->
+										 { proplists:get_value(pid, P),
+											 proplists:get_value(team, P) }
+								 end, S2),
 
-	add_scores(Frames, Streaks, S2),
-	Streaks.
+	Blue2 = add_pressuring_players(Frames, TeamLookup, Blue),
+	Red2 = add_pressuring_players(Frames, TeamLookup, Red),
+	[Blue2, Red2].
 
-find_streaks(T, [])->
+add_pressuring_players(Frames, TeamLookup, Streaks) ->
+	lists:map(fun(S) ->
+								S2 = streak_position(Frames, TeamLookup, S),
+								S2#streak{
+									players = lists:usort(
+															lists:flatten(S#streak.players)
+														 )
+								 }
+						end, Streaks).
+
+get_participants(Frame) ->
+	P1 = proplists:get_value(<<"participantFrames">>, Frame),
+	lists:map(
+		fun({_K, V}) -> V end,
+		P1).
+
+streak_position([], _, S) -> S;
+
+streak_position([F | Rest], TeamLookup, S) ->
+	T1 = S#streak.start - ?PRESSURE_GAP,
+	T2 = S#streak.finish + ?PRESSURE_GAP,
+	FT = proplists:get_value(<<"timestamp">>, F),
+	Plist = if
+						(T1 =< FT) and (FT =< T2) ->
+
+							Pf = get_participants(F),
+							%lager:debug("PF ~p ~p", [length(Pf), Pf]),
+							PosPlayers = lists:filtermap(
+														 fun(Participant) ->
+																 Pid = proplists:get_value(<<"participantId">>, Participant),
+																 Pos = proplists:get_value(<<"position">>, Participant),
+																 lager:debug("Pos ~p ", [S#streak.positions]),
+																 C1 = S#streak.team =:= proplists:get_value(Pid, TeamLookup),
+																 C2 = lists:any(
+																				fun(Spos)->
+																						is_local(Spos, Pos)
+																				end, S#streak.positions),
+																 if
+																	 C1 and C2 -> {true, Pid};
+																	 true -> false
+																 end
+														 end, Pf),
+							[ PosPlayers | S#streak.players];
+
+						true -> S#streak.players
+					end,
+	S2 = S#streak{players = Plist},
+	streak_position(Rest, TeamLookup, S2).
+
+streak_clean(S) ->
+	if
+		length(S#streak.events) == 1 -> false;
+		true ->
+			P = lists:filter( fun(X) -> X =/= 0 end,
+												lists:usort(
+													lists:flatten(S#streak.players)
+												 )
+											),
+			S2 = S#streak{
+						 players = P,
+						 positions = lists:filter( fun(X) -> X =/= undefined end, S#streak.positions)
+						},
+			{true, S2}
+	end.
+
+streak_sort(A, B) ->
+	A#streak.start =< B#streak.start.
+
+find_streaks(T, [], Team)->
 	[#streak{
+			team = Team,
 			start = T#time.stamp,
 			finish = T#time.stamp,
 			positions = [T#time.position],
@@ -134,12 +216,11 @@ find_streaks(T, [])->
 			players = T#time.attackers
 		 }];
 
-find_streaks(T, [S | Rest])->
+find_streaks(T, [S | Rest], Team) ->
 	New = T#time.stamp,
 	Diff = abs(New - S#streak.finish),
 	if
 		Diff < ?STREAK_GAP ->
-
 
 			S2 = S#streak{
 						 finish = New,
@@ -151,56 +232,27 @@ find_streaks(T, [S | Rest])->
 			[S2 | Rest];
 
 		true ->
-			Sprev = S#streak{
-								players = lists:usort( lists:flatten(S#streak.players) ),
-								positions = lists:filter( fun(X) -> X =/= undefined end, S#streak.positions)
+			Snew = #streak{
+								team = Team,
+								score = T#time.score,
+								start = T#time.stamp,
+								finish = T#time.stamp,
+								events = [T#time.type],
+								positions = [T#time.position],
+								players = T#time.attackers
 							 },
-			Snew = S#streak{
-							 score = T#time.score,
-							 start = T#time.stamp,
-							 finish = T#time.stamp,
-							 events = [T#time.type],
-							 positions = [T#time.position],
-							 players = T#time.attackers
-							},
-			[Snew, Sprev | Rest]
+			[Snew, S | Rest]
 	end.
 
-add_scores([], _, Scores) -> Scores;
-add_scores(_, [], Scores) -> Scores;
-
-add_scores([A, B | Frest], [T | Trest], Scores) ->
-
-	if
-		T#time.stamp > B#time.stamp -> add_scores([B, Frest], [T | Trest], Scores);
-
-		true ->
-			Origin = T#time.position,
-			Attackers = T#time.attackers,
-			Apid = lists:nth(1, Attackers),
-
-			P = proplists:get_value(<<"particpantFrames">>, A, []),
-			_A2 = lists:foldl(fun(E, Acc) ->
-														Pid = proplists:get_value(<<"participantID">>, E),
-														case lists:member(Acc, Pid) of
-															true -> Acc;
-															false ->
-																case is_same_team(Pid, Apid, Scores) of
-																	false -> Acc;
-																	true ->
-																		Pos = proplists:get_value(<<"position">>, E),
-																		case is_local(Pos, Origin) of
-																			true -> [Pid | Acc];
-																			false -> Acc
-																		end
-																end
-														end
-												end, Attackers, P)
-	end,
-
-	add_scores([A, B | Frest], [T | Trest], Scores).
-
-is_local(A, B) -> A =:= B.
+is_local(A, B) ->
+	X1 = proplists:get_value(<<"x">>, A),
+	Y1 = proplists:get_value(<<"y">>, A),
+	X2 = proplists:get_value(<<"x">>, B),
+	Y2 = proplists:get_value(<<"y">>, B),
+	D = math:sqrt(
+				math:pow( X2 - X1, 2) + math:pow( Y2 - Y1, 2)
+			 ),
+	D =< ?PRESSURE_RADIUS.
 
 process_player(Pdata) ->
 	Player = proplists:get_value(<<"player">>, Pdata),
@@ -211,17 +263,6 @@ process_player(Pdata) ->
 	 { score, 0 },
 	 { position, undefined }
 	].
-
-is_same_team(A, B, Scores) ->
-	participant_team(A, Scores) =:= participant_team(B, Scores).
-
-participant_team(Pid, [H | T]) ->
-	case proplists:get_value(pid, H) of
-		Pid ->
-			proplists:get_value(team, H);
-		_ ->
-			participant_team(Pid, T)
-	end.
 
 add_teams(Scores, P) ->
 	Team = proplists:get_value(<<"teamId">>, P),
@@ -268,7 +309,12 @@ process_event(E, Acc) ->
 							end;
 
 						<<"BUILDING_KILL">> -> 
-							Team = proplists:get_value(<<"teamId">>, E),
+							% The team of the building is the owning team rather than the
+							% attacking team, we'll just reverse that for our purposes.
+							Team = case proplists:get_value(<<"teamId">>, E) of
+											 100 -> 200;
+											 200 -> 100
+										 end,
 							#time{type = building, score = ?BUILDING_POINTS, attackers = [Killer | Assists], team = Team};
 
 						_ -> undefined
@@ -278,28 +324,10 @@ process_event(E, Acc) ->
 		undefined -> Acc;
 
 		S ->
-			S2 = S#time{stamp = proplists:get_value(<<"timestamp">>, E),
+			S2 = S#time{stamp = ?MIN(proplists:get_value(<<"timestamp">>, E)),
 									position = proplists:get_value(<<"position">>, E)},
 			[S2 | Acc]
 	end.
-
-%case Score of
-%undefined -> Acc;
-%S -> 
-%%Prime = proplists:get_value(<<"participantId">>, E, undefined),
-%Pframes = proplists:get_value(<<"participantFrames">>, Frame, []),
-%Ps = lists:foldl(fun(Part, Res) -> process_participant(Part, Res) end, [], Pframes),
-%
-%S2 = [ {time, proplists:get_value(<<"timestamp">>, E)},
-%{position, proplists:get_value(<<"position">>, E, undefined) },
-%{participants, Ps}
-%| S ],
-%[ S2 | Acc]
-%end.
-
-%process_participant(undefined, Acc) -> Acc;
-%process_participant({Id, Details}, Acc) ->
-%[{id, Id}, {position, proplists:get_value(<<"position">>, Details, undefined)} | Acc].
 
 handle_cast(_R, _S) -> {stop, bad_cast}.
 
