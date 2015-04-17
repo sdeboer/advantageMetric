@@ -1,0 +1,12 @@
+.content.summoners(ng-controller="SummonerController")
+
+  #summonerEntry
+    %form#findSummoner(name="findSummoner" ng-submit="base.submit()")
+      .field
+        %input(ng-model="base.summoner_name" ng-required="true" type="text" placeholder="summoner name")
+      .field
+        %select(ng-model="base.region" ng-options="o.name for o in active_regions" ng-required="true")
+
+  .summary
+    .match(ng-repeat="match in result.base")
+      .streak(data-match-id="{{ match.match.matchId }}")

@@ -66,7 +66,6 @@ handle_call({games, Id}, _F, S) ->
 									fun(G) ->
 											Gm = proplists:get_value(<<"gameMode">>, G),
 											St = proplists:get_value(<<"subType">>, G),
-											lager:debug("GT ~p / ~p", [Gm, St]),
 											is_accepted_queue(Gm, St)
 									end, GL), ?LIMIT),
 
@@ -84,7 +83,6 @@ handle_call({ranked, Id}, _F, S) ->
 					ML2 = lists:sublist(lists:filter(
 									fun(M) ->
 											Qt = proplists:get_value(<<"queueType">>, M),
-											lager:debug("QT ~p", [Qt]),
 											is_accepted_queue(Qt)
 									end, ML), ?LIMIT),
 
