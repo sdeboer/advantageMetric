@@ -6,7 +6,7 @@
 
 % client API
 -export([
-				 times/1,
+				 scores/1,
 				 streaks/1
 				]).
 
@@ -38,7 +38,7 @@
 				 }).
 
 % Amount of time that needs to lapse before its another streak
--define(STREAK_GAP, 0.33).
+-define(STREAK_GAP, 0.33). % minutes
 -define(URF_STREAK_GAP, ?STREAK_GAP / 2).
 
 % Amount of time before or after a streak that someone can be applying
@@ -46,6 +46,9 @@
 -define(PRESSURE_GAP, ?STREAK_GAP / 2).
 % And the radius they need to be in order to be considered pressuring
 % the streak
+%
+%% I'm assuming that API units are the same as spell units, but
+%% have not done anything to confirm this yet.
 -define(PRESSURE_RADIUS, 1500).
 
 -define(BLUE_TEAM, 100).
@@ -64,7 +67,7 @@
 start_link() ->
 	gen_server:start_link({local, ?MODULE}, ?MODULE, [], []).
 
-times(Match) ->
+scores(Match) ->
 	gen_server:call(?MODULE, {process, Match}).
 
 streaks(Match) ->
@@ -84,7 +87,13 @@ get_streaks(M) ->
 	Times = lists:foldl(fun process_frame/2, [], Frames),
 	T2 = lists:sort(fun(A,B) ->
 											A#time.stamp =< B#time.stamp
-									end, Times),
+									end,
+									% remove executions
+									lists:filter(
+										fun(T) ->
+												T#time.attackers /= [0]
+										end, Times)
+								 ),
 	Participants = proplists:get_value(<<"participants">>, M),
 	{Atimes, Btimes} = lists:partition(fun(T) ->
 																				 case T#time.team of
@@ -100,14 +109,14 @@ get_streaks(M) ->
 	Astreaks = lists:foldl(
 							 fun(S, Acc)->
 									 find_streaks(S, Acc, ?BLUE_TEAM)
-									 end, [], Atimes),
+							 end, [], Atimes),
 	As1 = lists:filtermap(fun streak_clean/1, Astreaks),
 	As2 = lists:sort(fun streak_sort/2, As1),
 
 	Bstreaks = lists:foldl(
 							 fun(S, Acc)->
 									 find_streaks(S, Acc, ?RED_TEAM)
-									 end, [], Btimes),
+							 end, [], Btimes),
 	Bs1 = lists:filtermap(fun streak_clean/1, Bstreaks),
 	Bs2 = lists:sort(fun streak_sort/2, Bs1),
 	[Frames, As2, Bs2].
@@ -163,12 +172,10 @@ streak_position([F | Rest], TeamLookup, S) ->
 						(T1 =< FT) and (FT =< T2) ->
 
 							Pf = get_participants(F),
-							%lager:debug("PF ~p ~p", [length(Pf), Pf]),
 							PosPlayers = lists:filtermap(
 														 fun(Participant) ->
 																 Pid = proplists:get_value(<<"participantId">>, Participant),
 																 Pos = proplists:get_value(<<"position">>, Participant),
-																 lager:debug("Pos ~p ", [S#streak.positions]),
 																 C1 = S#streak.team =:= proplists:get_value(Pid, TeamLookup),
 																 C2 = lists:any(
 																				fun(Spos)->
@@ -255,11 +262,18 @@ is_local(A, B) ->
 	D =< ?PRESSURE_RADIUS.
 
 process_player(Pdata) ->
-	Player = proplists:get_value(<<"player">>, Pdata),
+	Pid = proplists:get_value(<<"participantId">>, Pdata),
+
+	[Sid, Name] = case proplists:get_value(<<"player">>, Pdata) of
+									undefined -> [undefined, io_lib:format("Player ~p", [Pid])];
+									Player ->
+										[ proplists:get_value(<<"summonerId">>, Player),
+											proplists:get_value(<<"summonerName">>, Player) ]
+								end,
 	[
-	 { pid, proplists:get_value(<<"participantId">>, Pdata)},
-	 { sid, proplists:get_value(<<"summonerId">>, Player)},
-	 { name, proplists:get_value(<<"summonerName">>, Player)},
+	 { pid, Pid},
+	 { sid, Sid},
+	 { name, Name},
 	 { score, 0 },
 	 { position, undefined }
 	].
@@ -312,8 +326,8 @@ process_event(E, Acc) ->
 							% The team of the building is the owning team rather than the
 							% attacking team, we'll just reverse that for our purposes.
 							Team = case proplists:get_value(<<"teamId">>, E) of
-											 100 -> 200;
-											 200 -> 100
+											 ?BLUE_TEAM -> ?RED_TEAM;
+											 ?RED_TEAM -> ?BLUE_TEAM
 										 end,
 							#time{type = building, score = ?BUILDING_POINTS, attackers = [Killer | Assists], team = Team};
 

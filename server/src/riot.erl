@@ -7,8 +7,7 @@
 % client API
 -export([
 				 summoner_id/1,
-				 matches_for_name/1,
-				 matches/1,
+				 ranked/1, games/1,
 				 match/1, match/2
 				]).
 
@@ -28,19 +27,21 @@
 -define(PROTO, "https://").
 -define(DOMAIN, ".api.pvp.net/").
 -define(PATH, "api/lol/").
+-define(LIMIT, 3).
 
 summoner_id(Name) ->
 	gen_server:call(?MODULE, {summoner, string:to_lower(Name)}).
 
-matches_for_name(Name) -> matches( summoner_id(Name) ).
+ranked(Id) ->
+	gen_server:call(?MODULE, {ranked, Id}).
 
-matches(Id) ->
-	gen_server:call(?MODULE, {matches, Id}).
+games(Id) ->
+	gen_server:call(?MODULE, {games, Id}).
 
 match(Id) -> match(Id, false).
 
 match(Id, Timeline) ->
-	gen_server:call(?MODULE, {match, Id, Timeline}).
+	gen_server:call(?MODULE, {match, Id, Timeline}, 10000).
 
 handle_call({summoner, Name}, _F, S) ->
 	U = url("summoner/by-name", "v1.4", Name, S),
@@ -54,12 +55,40 @@ handle_call({summoner, Name}, _F, S) ->
 
 	{reply, R, S};
 
-handle_call({matches, Id}, _F, S) ->
-	U = url("matchhistory", "v2.2", Id, S),
+handle_call({games, Id}, _F, S) ->
+	Arg = lists:flatten( [ io_lib:format("~p", [Id]) | "/recent" ]),
+	U = url("game/by-summoner", "v1.3", Arg, [{endIndex, 5}], S),
+
+	R = case request(U) of
+				{ok, Res} ->
+					GL = proplists:get_value(<<"games">>, Res),
+					GL2 = lists:sublist(lists:filter(
+									fun(G) ->
+											Gm = proplists:get_value(<<"gameMode">>, G),
+											St = proplists:get_value(<<"subType">>, G),
+											lager:debug("GT ~p / ~p", [Gm, St]),
+											is_accepted_queue(Gm, St)
+									end, GL), ?LIMIT),
+
+					[ proplists:get_value(<<"gameId">>, X) || X <- GL2 ];
+				{error, C, V} -> {error, C, V}
+			end,
+
+	{reply, R, S};
+
+handle_call({ranked, Id}, _F, S) ->
+	U = url("matchhistory", "v2.2", Id, [{endIndex, 5}], S),
 
 	R = case request(U) of
 				{ok, [{<<"matches">>, ML}]} ->
-					[ proplists:get_value(<<"matchId">>, X) || X <- ML ];
+					ML2 = lists:sublist(lists:filter(
+									fun(M) ->
+											Qt = proplists:get_value(<<"queueType">>, M),
+											lager:debug("QT ~p", [Qt]),
+											is_accepted_queue(Qt)
+									end, ML), ?LIMIT),
+
+					[ proplists:get_value(<<"matchId">>, X) || X <- ML2 ];
 				{error, C, V} -> {error, C, V}
 			end,
 
@@ -115,3 +144,18 @@ url(Request, Version, Arg, Params, S) ->
 
 url(Request, Version, Arg, S)->
 	url(Request, Version, Arg, [], S).
+
+is_accepted_queue(<<"CLASSIC">>, X) -> is_accepted_queue(X).
+
+is_accepted_queue(<<"URF">>) -> true;
+is_accepted_queue(<<"CAP_5x5">>) -> true;
+is_accepted_queue(<<"NORMAL_5x5_BLIND">>) -> true;
+is_accepted_queue(<<"RANKED_SOLO_5x5">>) -> true;
+is_accepted_queue(<<"RANKED_PREMADE_5x5">>) -> true;
+is_accepted_queue(<<"NORMAL_5x5_DRAFT">>) -> true;
+is_accepted_queue(<<"RANKED_TEAM_5x5">>) -> true;
+is_accepted_queue(<<"GROUP_FINDER_5x5">>) -> true;
+is_accepted_queue(<<"SR_6x6">>) -> true;
+is_accepted_queue(<<"URF_5x5">>) -> true;
+is_accepted_queue(<<"HEXAKILL">>) -> true;
+is_accepted_queue(_) -> false.
