@@ -37,6 +37,17 @@
 					victims = []
 				 }).
 
+-define(R2P(Record),
+				record_to_proplist(#Record{} = Rec) ->
+						Z = lists:zip(
+									record_info(fields, Record), tl(tuple_to_list(Rec))
+								 ),
+						lists:filter(fun({_K, undefined}) -> false;
+														(_X) -> true end,
+												 Z)).
+
+?R2P(streak).
+
 % Amount of time that needs to lapse before its another streak
 -define(STREAK_GAP, 0.33). % minutes
 -define(URF_STREAK_GAP, ?STREAK_GAP / 2).
@@ -144,7 +155,9 @@ process(M) ->
 
 	Blue2 = add_pressuring_players(Frames, TeamLookup, Blue),
 	Red2 = add_pressuring_players(Frames, TeamLookup, Red),
-	[Blue2, Red2].
+	Blue3 = [ record_to_proplist(S) || S <- Blue2 ],
+	Red3 = [ record_to_proplist(S) || S <- Red2 ],
+	[Blue3, Red3].
 
 add_pressuring_players(Frames, TeamLookup, Streaks) ->
 	lists:map(fun(S) ->
@@ -301,24 +314,25 @@ process_event(E, Acc) ->
 	Assists = proplists:get_value(<<"assistingParticipantsId">>, E, []),
 	Killer = proplists:get_value(<<"killerId">>, E, undefined),
 
-	Score = case proplists:get_value(<<"eventType">>, E, undefined) of
+	Etype = proplists:get_value(<<"eventType">>, E, undefined),
+	Score = case Etype of
 						<<"WARD_PLACED">> -> 
 							Creator = proplists:get_value(<<"creatorId">>, E),
-							#time{type = ward_placed, score = ?WARD_POINTS, attackers = [Creator]};
+							#time{type = Etype, score = ?WARD_POINTS, attackers = [Creator]};
 
 						<<"WARD_KILL">> -> 
-							#time{type = ward_kill, score = ?WARD_KILL_POINTS, attackers = [Killer]};
+							#time{type = Etype, score = ?WARD_KILL_POINTS, attackers = [Killer]};
 
 						<<"CHAMPION_KILL">> -> 
 							Victim = proplists:get_value(<<"victimId">>, E),
-							#time{type = champion, score = ?CHAMPION_POINTS, attackers = [Killer | Assists], victims = [Victim]};
+							#time{type = Etype, score = ?CHAMPION_POINTS, attackers = [Killer | Assists], victims = [Victim]};
 
 						<<"ELITE_MONSTER_KILL">> -> 
 							case proplists:get_value(<<"monsterType">>, E, undefined) of
 								<<"BARON_NASHOR">> ->
-									#time{type = baron, score = ?BARON_POINTS, attackers = [Killer | Assists]};
+									#time{type = Etype, score = ?BARON_POINTS, attackers = [Killer | Assists]};
 								<<"DRAGON">> ->
-									#time{type = dragon, score = ?DRAGON_POINTS, attackers = [Killer | Assists]};
+									#time{type = Etype, score = ?DRAGON_POINTS, attackers = [Killer | Assists]};
 								_ -> undefined
 							end;
 
@@ -329,7 +343,7 @@ process_event(E, Acc) ->
 											 ?BLUE_TEAM -> ?RED_TEAM;
 											 ?RED_TEAM -> ?BLUE_TEAM
 										 end,
-							#time{type = building, score = ?BUILDING_POINTS, attackers = [Killer | Assists], team = Team};
+							#time{type = Etype, score = ?BUILDING_POINTS, attackers = [Killer | Assists], team = Team};
 
 						_ -> undefined
 					end,

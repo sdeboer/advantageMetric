@@ -25,21 +25,22 @@ init(_Transport, _Req, _Opts) ->
 	{upgrade, protocol, cowboy_rest}.
 
 rest_init(Req, _RouteOpts) ->
-	case req:binding(summoner_name, Req) of
-		{undefined, R2} -> {bad, R2, undefined};
+	case cowboy_req:binding(summoner_name, Req) of
+		{undefined, R2} -> {stop, R2, undefined};
 
 		{Name, R2} -> 
-			S = #state{summoner_name = Name},
-			case req:binding(compare_to_name, R2) of
+			S = #state{summoner_name = binary_to_list(Name)},
+			case cowboy_req:binding(compare_to_name, R2) of
 				{undefined, R3} -> {ok, R3, S};
 				{Cname, R3} ->
-					{ok, R3, S#state{compare_to_name = Cname}}
+					{ok, R3, S#state{compare_to_name = binary_to_list(Cname)}}
 			end
 	end.
 
 content_types_provided(Req, S) ->
 	{[
-		{ '*', to_json }
+		{{<<"application">>, <<"json">>, '*'}, to_json},
+		{<<"text/html">>, to_json }
 	 ], Req, S}.
 
 to_json(Req, S)->
@@ -49,8 +50,8 @@ to_json(Req, S)->
 					 Name -> [{compare, scores(Name)} | Base]
 				 end,
 
-	Json = jiffy:encode(Resp),
-	{B, R2} = json:return_json(Json, Req),
+	Json = jsx:encode(Resp),
+	{B, R2} = json_handler:return_json(Json, Req),
 	{B, R2, S}.
 
 scores(Name) ->
@@ -61,9 +62,8 @@ scores(Name) ->
 			lists:map(
 				fun(Mid) ->
 						M = riot:match(Mid, true),
-						lager:debug("MMATCH ~p =: ~p", [Mid, M]),
 						Streaks = objectives:scores(M),
-						[{match, M}, 
+						[ {match, M}, 
 						 {pid, match_pid(Sid, M)},
 						 {streaks, Streaks}]
 				end, Matches)
@@ -71,7 +71,6 @@ scores(Name) ->
 
 match_pid(Sid, Match) ->
 	Idents = proplists:get_value(<<"participantIdentities">>, Match),
-	lager:debug("Idents ~p", [Idents]),
 	match_participant(Sid, Idents).
 
 match_participant(Sid, [P | Rest]) ->

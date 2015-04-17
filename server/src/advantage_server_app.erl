@@ -9,7 +9,7 @@ start(normal, _StartArgs) ->
 	PortOpts = [{port, port()}],
 	ProtoOpts = [
 							 {env, [{dispatch, routes()}]},
-							 {middlewares, [cowboy_router, cors, sessions, cowboy_handler]}
+							 {middlewares, [cowboy_router, cors, cowboy_handler]}
 							],
 
 	case cowboy:start_http(http, ?C_ACCEPTORS, PortOpts, ProtoOpts) of
@@ -30,7 +30,7 @@ routes() ->
 	cowboy_router:compile(
 		[{'_',
 			[
-			 {"/summoner/:summoner_id", summoner_handler, []},
+			 {"/summoner/:summoner_name[/:compare_to_name]", summoner_handler, []},
 			 {"/match/:match_id", match_handler, []}
 			]
 		 }]
