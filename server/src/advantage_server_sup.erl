@@ -14,7 +14,6 @@ start_link() ->
 
 init([]) ->
 	Children = [
-							?CHILD(persist),
 							?CHILD(riot),
 							?CHILD(objectives)
 						 ],
