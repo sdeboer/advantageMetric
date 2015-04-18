@@ -6,7 +6,7 @@ measuring synchronicity of obtaining an advantage.
 
 ## Run Time
 
-(Potentially) See it in action here: http://contribution.psiinteractive.com/summoner
+(Potentially) See it in action here: http://team.psiinteractive.com/
 
 (If I still have the server running, I'll keep it up for a couple of weeks anyway)
 
@@ -22,8 +22,14 @@ rebar compile && RIOT_API_KEY=<<YOUR KEY>> CLIENT_DOMAIN="localhost:4567" ./run_
 cd advantageMetric/client
 bundle install
 bundle exec middleman -e development
-# point browser at http://localhost:4567/summoner
+# point browser at http://localhost:4567/
 ```
+
+## How to use it
+
+Type in a summoner name.  Hit return.
+
+Type in another in the second box.  Hit return.
 
 ## API Challenge response
 
@@ -106,6 +112,9 @@ contribute to the scores.
 
 ## Next Steps
 
+A couple of weeks of hobby time isn't much...
+
+* All regions
 * Better name
 * Cosmetics...all of them.
 * Getting normal games to work

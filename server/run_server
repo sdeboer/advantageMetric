@@ -3,7 +3,7 @@
 # Potential ENV vars, defaults are set in advantage_server.app.src
 # SESSION_COOKIE (c_session)
 # PORT (10100)
-# CLIENT_DOMAIN (contribution.psiinteractive.com)
+# CLIENT_DOMAIN (team.psiinteractive.com)
 
 erl \
 	-pa ebin \
