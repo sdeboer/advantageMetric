@@ -9,10 +9,10 @@ The current used statistics of KDA, GPM, CSD, etc. can be good measures of
 individual performance, but even these can fail in this regard.  KDA is
 probably the most obvious example of this.
 
-** High KDA : a player with a high KDA could be running around the map hunting
+* *High KDA* : a player with a high KDA could be running around the map hunting
 	for kills and being generally greedy.  Making it impossible for their team to
 	win once team fights start.
-** Low KDA : a player with low KDA could be setting up and making plays for
+* *Low KDA* : a player with low KDA could be setting up and making plays for
 	their team through sacrificing their own benefit.
 
 It is also the case that a team can collectively have gained a gold advantage
