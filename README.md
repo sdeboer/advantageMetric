@@ -3,6 +3,28 @@
 A proposed way of measuring team coordination and map awareness through
 measuring synchronicity of obtaining an advantage.
 
+
+## Run Time
+
+(Potentially) See it in action here: http://contribution.psiinteractive.com/summoner
+
+(If I still have the server running, I'll keep it up for a couple of weeks anyway)
+
+To run this locally you need to do something along the lines of:
+
+```shell
+# do what you need to in order to get erlang + rebar and ruby + bundler installed
+cd advantageMetric/server
+rebar get-deps
+rebar compile && RIOT_API_KEY=<<YOUR KEY>> CLIENT_DOMAIN="localhost:4567" ./run_server
+
+# separate shell
+cd advantageMetric/client
+bundle install
+bundle exec middleman -e development
+# point browser at http://localhost:4567/summoner
+```
+
 ## API Challenge response
 
 API Challenge description : https://developer.riotgames.com/terms#statement

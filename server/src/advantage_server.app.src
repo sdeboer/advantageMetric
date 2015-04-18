@@ -11,7 +11,7 @@
 	{env, [
 				 {http_port, 10100},
 				 {session_cookie, <<"c_session">>},
-				 {advantage_client_domain, <<"advantage.psiinteractive.com">>}
+				 {advantage_client_domain, <<"contribution.psiinteractive.com">>}
 				]}
  ]}.
 % vim: set filetype=erlang:
