@@ -44,6 +44,7 @@ match(Id, Timeline) ->
 	gen_server:call(?MODULE, {match, Id, Timeline}, 10000).
 
 handle_call({summoner, Name}, _F, S) ->
+	lager:info("Looking for ~p", [Name]),
 	N = re:replace(
 				string:to_lower(Name),
 				"\\s+", "", [global,{return,list}]),
