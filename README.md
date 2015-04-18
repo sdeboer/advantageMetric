@@ -90,18 +90,18 @@ contribute to the scores.
 * Handling other game modes
 * Storing result data such that comparisons could be made to various
 	different conditions:
-** Average of your ELO
-** Average for a given position
-** Average for a given champ
-** etc.
+	* Average of your ELO
+	* Average for a given position
+	* Average for a given champ
+	* etc.
 * Ability to drill down into streaks
 * Getting some further derived stats like
-** Differential scores
-** Differences between queue types
-** Correlation between position, winning/losing team, and contribution
-** Successful initiations
-** Clean up scores
-** Streak ordering and whether there are particularly
+	* Differential scores
+	* Differences between queue types
+	* Correlation between position, winning/losing team, and contribution
+	* Successful initiations
+	* Clean up scores
+	* Streak ordering and whether there are particularly
 	successful patterns
 * A bunch of other things...
 
