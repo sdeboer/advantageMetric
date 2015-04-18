@@ -38,8 +38,8 @@ class SummonerController
 		# players are their participantId
 		series = []
 		totals = []
-		blue = name: "Blue", data: [], color: 'blue'
-		red = name: "Red", data: [], color: 'red'
+		blue = name: "Blue", data: [], color: 'blue', yAxis: 1
+		red = name: "Red", data: [], color: 'red', yAxis: 1
 		winner = if game.match.teams[0].winner
 			"Blue"
 		else
@@ -76,7 +76,7 @@ class SummonerController
 						else
 							visibility = false
 
-						series[pid] = visible: visibility, name: name, yAxis: 1, data: [ point ]
+						series[pid] = visible: visibility, name: name, data: [ point ]
 
 		series[0] = blue
 		series[11] = red
@@ -100,13 +100,16 @@ class SummonerController
 			title: { text: 'Team Advantage'}
 			xAxis: { title: { text: 'Time'}, type: 'datetime', dateTimeLabelFormats: formats }
 			yAxis: [
-				{ title: { text: 'Score'} },
 				{
-					title: { text: '% Contribution'}
+					title: { text: 'Player Contribution (%)'}
 					gridLineWidth: 0
-					opposite: true
 					min: 0
 					max: 100
+				},
+				{
+					title: { text: 'Team Score'}
+					opposite: true
+					min: 0
 				}
 			]
 			plotOptions: {

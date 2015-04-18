@@ -30,7 +30,7 @@
 -define(LIMIT, 3).
 
 summoner_id(Name) ->
-	gen_server:call(?MODULE, {summoner, string:to_lower(Name)}).
+	gen_server:call(?MODULE, {summoner, Name}).
 
 ranked(Id) ->
 	gen_server:call(?MODULE, {ranked, Id}).
@@ -44,11 +44,15 @@ match(Id, Timeline) ->
 	gen_server:call(?MODULE, {match, Id, Timeline}, 10000).
 
 handle_call({summoner, Name}, _F, S) ->
-	U = url("summoner/by-name", "v1.4", Name, S),
-	N = list_to_binary(Name),
+	N = re:replace(
+				string:to_lower(Name),
+				"\\s+", "", [global,{return,list}]),
+	N2 = http_uri:encode( N ),
+	U = url("summoner/by-name", "v1.4", N2, S),
+	N3 = list_to_binary(N),
 
 	R = case request(U) of
-				{ok, [{N, Props}]} ->
+				{ok, [{N3, Props}]} ->
 					proplists:get_value(<<"id">>, Props);
 				{error, C, V} -> {error, C, V}
 			end,
@@ -63,11 +67,11 @@ handle_call({games, Id}, _F, S) ->
 				{ok, Res} ->
 					GL = proplists:get_value(<<"games">>, Res),
 					GL2 = lists:sublist(lists:filter(
-									fun(G) ->
-											Gm = proplists:get_value(<<"gameMode">>, G),
-											St = proplists:get_value(<<"subType">>, G),
-											is_accepted_queue(Gm, St)
-									end, GL), ?LIMIT),
+																fun(G) ->
+																		Gm = proplists:get_value(<<"gameMode">>, G),
+																		St = proplists:get_value(<<"subType">>, G),
+																		is_accepted_queue(Gm, St)
+																end, GL), ?LIMIT),
 
 					[ proplists:get_value(<<"gameId">>, X) || X <- GL2 ];
 				{error, C, V} -> {error, C, V}
@@ -81,10 +85,10 @@ handle_call({ranked, Id}, _F, S) ->
 	R = case request(U) of
 				{ok, [{<<"matches">>, ML}]} ->
 					ML2 = lists:sublist(lists:filter(
-									fun(M) ->
-											Qt = proplists:get_value(<<"queueType">>, M),
-											is_accepted_queue(Qt)
-									end, ML), ?LIMIT),
+																fun(M) ->
+																		Qt = proplists:get_value(<<"queueType">>, M),
+																		is_accepted_queue(Qt)
+																end, ML), ?LIMIT),
 
 					[ proplists:get_value(<<"matchId">>, X) || X <- ML2 ];
 				{error, C, V} -> {error, C, V}
@@ -108,8 +112,12 @@ request(Url) ->
 	case restc:request(get, Url) of
 		{ok, 200, _H, V} -> {ok, V};
 		{ok, C, _H, Data} ->
-			S = proplists:get_value(<<"status">>, Data),
-			M = proplists:get_value(<<"message">>, S),
+			M = case proplists:get_value(<<"status">>, Data) of
+						undefined ->
+							<<"no message">>;
+						S ->
+							proplists:get_value(<<"message">>, S)
+					end,
 			{error, C, M}
 	end.
 

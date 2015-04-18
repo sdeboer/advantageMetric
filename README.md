@@ -3,6 +3,18 @@
 A proposed way of measuring team coordination and map awareness through
 measuring synchronicity of obtaining an advantage.
 
+## API Challenge response
+
+API Challenge description : https://developer.riotgames.com/terms#statement
+
+When the original API Challenge was given it was stated to be in concert
+with the announced N.U.R.F. changes.  Which in my consideration, if at
+all playable, would have required the utmost in team synchronization of
+skill shots in order to achieve any meaningful result.
+
+This led me to thinking more deeply about team coordination and how to 
+measure it and what the value of it might be...
+
 ## Rationale
 
 The current used statistics of KDA, GPM, CSD, etc. can be good measures of
@@ -20,7 +32,7 @@ but still is unable to win because they lack team coordination.
 
 ## Proposal
 
-In my opinion one of the main ways professional teams win is through managing
+In my opinion one of the main ways teams win is through managing
 the whole map to achieve many actions at once.  For example synchronizing a
 bot tower kill while also warding top.  These positive actions then lead into
 another action.  Chain more positive actions together in a row and a huge
@@ -45,7 +57,10 @@ may have coordinated their actions with other team members very well
 and can recognized as such.
 
 The chart shows their contribution over time, where the overall individual
-score is the average of comparing their total to their teams.
+score (shown in the subtitle) is the average of comparing their total to their teams.
+
+*Note* It is entirely possible for people on the losing team to have
+a higher team contribution percentage than people on the winning team.
 
 ## Player Contribution
 
@@ -66,6 +81,33 @@ of the event, but that isn't provided in the post-match data)
 
 Any event that is a single event, even destroying a tower, does not
 contribute to the scores.
+
+## Next Steps
+
+* Better name
+* Cosmetics...all of them.
+* Getting normal games to work
+* Handling other game modes
+* Storing result data such that comparisons could be made to various
+	different conditions:
+** Average of your ELO
+** Average for a given position
+** Average for a given champ
+** etc.
+* Ability to drill down into streaks
+* Getting some further derived stats like
+** Differential scores
+** Differences between queue types
+** Correlation between position, winning/losing team, and contribution
+** Successful initiations
+** Clean up scores
+** Streak ordering and whether there are particularly
+	successful patterns
+* A bunch of other things...
+
+I'd also like to consider how to remove the "game winning push"
+especially the winning team has a huge advantage over the other
+team.  This last push can artificially pad all statistics in LoL.
 
 ## Constants
 
