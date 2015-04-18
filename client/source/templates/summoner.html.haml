@@ -1,12 +1,26 @@
 .content.summoners(ng-controller="SummonerController")
 
   #summonerEntry
-    %form#findSummoner(name="findSummoner" ng-submit="base.submit()")
-      .field
-        %input(ng-model="base.summoner_name" ng-required="true" type="text" placeholder="summoner name")
-      .field
-        %select(ng-model="base.region" ng-options="o.name for o in active_regions" ng-required="true")
+    %h2 Summoner A
 
-  .summary
-    .match(ng-repeat="match in result.base")
+    %form#findSummonerA(name="findSummonerA" ng-submit="a.submit()")
+      .field
+        %input(ng-model="a.summoner_name" ng-required="true" type="text" placeholder="summoner name")
+      .field
+        %select(ng-model="a.region" ng-options="o.name for o in active_regions" ng-required="true")
+
+    %h2 Summoner B
+
+    %form#findSummonerB(name="findSummonerB" ng-submit="b.submit()")
+      .field
+        %input(ng-model="b.summoner_name" ng-required="true" type="text" placeholder="summoner name")
+      .field
+        %select(ng-model="b.region" ng-options="o.name for o in active_regions" ng-required="true")
+
+  .summary.a
+    .match(ng-repeat="match in result_a.base")
+      .streak(data-match-id="{{ match.match.matchId }}")
+
+  .summary.b
+    .match(ng-repeat="match in result_b.base")
       .streak(data-match-id="{{ match.match.matchId }}")
