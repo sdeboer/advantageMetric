@@ -79,3 +79,11 @@ _These are defined in objectives.erl_
 * *Dragon* 3
 * *Baron* 5
 * *Tower* 10
+
+## Limitations
+
+* Errors on the server are not reported in the interface at all
+* CSS is sloppy, the right column will move to left when there is
+	no content, that is when you search for a new player.
+* There is no loading indicator after you hit return/submit the
+	form.

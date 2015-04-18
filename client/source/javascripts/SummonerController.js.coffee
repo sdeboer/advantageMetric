@@ -23,14 +23,12 @@ class SummonerController
 		@$scope.result_b = @Summoner.get {summoner_name: @$scope.b.summoner_name}, @responseB
 
 	responseA: =>
-		console.log 'response', @$scope.result_a
 		@response @$scope.result_a
 
 	responseB: =>
 		@response @$scope.result_b
 
 	response: (result)=>
-		console.log 'result', result
 		requestAnimationFrame =>
 			for g in result.base
 				@setSeries g
@@ -117,7 +115,7 @@ class SummonerController
 			series: series
 		}
 
-		$(".summary .streak[data-match-id='#{game.match.matchId}'").highcharts(options)
+		$(".section .streak[data-match-id='#{game.match.matchId}'").highcharts(options)
 
 App.controller 'SummonerController', ['$scope', 'SummonerResource', 'Advantage.conf', SummonerController]
 
