@@ -30,7 +30,7 @@ routes() ->
 	cowboy_router:compile(
 		[{'_',
 			[
-			 {"/summoner/:summoner_name[/:compare_to_name]", summoner_handler, []},
+			 {"/summoner/:type/:summoner_name[/:compare_to_name]", summoner_handler, []},
 			 {"/match/:match_id", match_handler, []}
 			]
 		 }]

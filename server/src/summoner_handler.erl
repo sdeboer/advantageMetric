@@ -14,12 +14,18 @@
 				]).
 
 % for testing
--export([ scores/1 ]).
+-export([ 
+				 recent_scores/1,
+				 ranked_scores/1
+				]).
 
 -record(state, {
+					recent = true,
 					summoner_name,
 					compare_to_name
 				 }).
+
+-define(RANKED_QUEUE, "ranked").
 
 init(_Transport, _Req, _Opts) ->
 	{upgrade, protocol, cowboy_rest}.
@@ -44,42 +50,70 @@ content_types_provided(Req, S) ->
 	 ], Req, S}.
 
 to_json(Req, S)->
-	Base = [{base, scores(S#state.summoner_name)}],
+	{Params, R2} = cowboy_req:parse_qs(Req),
+	lager:debug("Recent? ~p", [ proplists:get_value(queue_type, Params) ] ),
+	ScoreFn = case proplists:get_value(queue_type, Params) of
+							?RANKED_QUEUE ->
+								fun riot:ranked_ids/1;
+							_ ->
+								fun riot:recent_ids/1
+						end,
+
+	Summoner = [{summoner, retrieve(S#state.summoner_name, ScoreFn)}],
+
 	Resp = case S#state.compare_to_name of
-					 undefined -> Base;
-					 Name -> [{compare, scores(Name)} | Base]
+					 undefined -> Summoner;
+					 Name -> [{compare, retrieve(Name, ScoreFn)} | Summoner]
 				 end,
 
 	Json = jsx:encode(Resp),
-	{B, R2} = json_handler:return_json(Json, Req),
-	{B, R2, S}.
+	{B, R3} = json_handler:return_json(Json, R2),
+	{B, R3, S}.
 
-scores(Name) ->
+recent_scores(Name) ->
+	retrieve(Name, fun riot:recent_ids/1).
+
+ranked_scores(Name) ->
+	retrieve(Name, fun riot:ranked_ids/1).
+
+retrieve(Name, Fn) ->
 	case riot:summoner_id(Name) of
 		{error, C, V} -> {error, C, V};
 		Sid ->
-			Matches = riot:ranked(Sid),
-			lists:map(
-				fun(Mid) ->
-						M = riot:match(Mid, true),
-						Streaks = objectives:scores(M),
-						[ {match, M}, 
-						 {pid, match_pid(Sid, M)},
-						 {streaks, Streaks}]
-				end, Matches)
+			[ match_map(M) || M <- Fn(Sid) ]
 	end.
 
-match_pid(Sid, Match) ->
-	Idents = proplists:get_value(<<"participantIdentities">>, Match),
-	match_participant(Sid, Idents).
+match_map(Match) ->
+	Cid = proplists:get_value(champion, Match),
+	Tid = proplists:get_value(team, Match),
+	Mid = proplists:get_value(matchId, Match),
 
-match_participant(Sid, [P | Rest]) ->
-	% this doesn't work for recent games, as we need to
-	% get some data from the initial games call in order
-	% to tell which champ the current player is using.
-	Player = proplists:get_value(<<"player">>, P),
-	case proplists:get_value(<<"summonerId">>, Player) of
-		Sid ->
-			proplists:get_value(<<"participantId">>, P);
-		_ -> match_participant(Sid, Rest)
+	M = riot:match(Mid, true),
+
+	Parts = proplists:get_value(<<"participants">>, M),
+	Pid = lookup_pid(Tid, Cid, Parts),
+
+	Streaks = objectives:scores(M),
+
+	[
+	 {match, M},
+	 {pid, Pid},
+	 {streaks, Streaks}
+	].
+
+lookup_pid(Tid, Cid, [P | Prest]) ->
+	case proplists:get_value(<<"teamId">>, P) of
+		Tid ->
+
+			case proplists:get_value(<<"championId">>, P) of
+				Cid ->
+
+					proplists:get_value(<<"participantId">>, P);
+
+				_ ->
+					lookup_pid(Tid, Cid, Prest)
+			end;
+
+		_ ->
+			lookup_pid(Tid, Cid, Prest)
 	end.

@@ -30,7 +30,7 @@ class SummonerController
 
 	response: (result)=>
 		requestAnimationFrame =>
-			for g in result.base
+			for g in result.summoner
 				@setSeries g
 
 	setSeries: (game)->

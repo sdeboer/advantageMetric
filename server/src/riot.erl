@@ -7,7 +7,8 @@
 % client API
 -export([
 				 summoner_id/1,
-				 ranked/1, games/1,
+				 ranked_ids/1, recent_ids/1,
+				 recent_list/1,
 				 match/1, match/2
 				]).
 
@@ -32,11 +33,14 @@
 summoner_id(Name) ->
 	gen_server:call(?MODULE, {summoner, Name}).
 
-ranked(Id) ->
-	gen_server:call(?MODULE, {ranked, Id}).
+ranked_ids(Id) ->
+	gen_server:call(?MODULE, {ranked_ids, Id}).
 
-games(Id) ->
-	gen_server:call(?MODULE, {games, Id}).
+recent_ids(Id) ->
+	gen_server:call(?MODULE, {recent_ids, Id}).
+
+recent_list(Id) ->
+	gen_server:call(?MODULE, {recent_list, Id}).
 
 match(Id) -> match(Id, false).
 
@@ -60,38 +64,62 @@ handle_call({summoner, Name}, _F, S) ->
 
 	{reply, R, S};
 
-handle_call({games, Id}, _F, S) ->
-	Arg = lists:flatten( [ io_lib:format("~p", [Id]) | "/recent" ]),
+handle_call({recent_list, Id}, _F, S) ->
+	Arg = lists:flatten( io_lib:format("~p/recent", [Id]) ),
+	U = url("game/by-summoner", "v1.3", Arg, [{endIndex, 5}], S),
+	case request(U) of
+		{ok, Res} ->
+			{reply, Res, S};
+		{error, C, V} ->
+			{reply,
+			 {error, C, V},
+			 S}
+	end;
+
+handle_call({recent_ids, Sid}, _F, S) ->
+	Arg = lists:flatten( io_lib:format("~p/recent", [Sid]) ),
 	U = url("game/by-summoner", "v1.3", Arg, [{endIndex, 5}], S),
 
 	R = case request(U) of
 				{ok, Res} ->
 					GL = proplists:get_value(<<"games">>, Res),
-					GL2 = lists:sublist(lists:filter(
-																fun(G) ->
-																		Gm = proplists:get_value(<<"gameMode">>, G),
-																		St = proplists:get_value(<<"subType">>, G),
-																		is_accepted_queue(Gm, St)
-																end, GL), ?LIMIT),
+					GL2 = lists:filtermap(
+									fun(G) ->
 
-					[ proplists:get_value(<<"gameId">>, X) || X <- GL2 ];
+											Gm = proplists:get_value(<<"gameMode">>, G),
+											St = proplists:get_value(<<"subType">>, G),
+											case is_accepted_queue(Gm, St) of
+												true ->
+													{true, game_team_champ(G)};
+												false -> false
+											end
+
+									end, GL),
+					lists:sublist(GL2, ?LIMIT);
+
 				{error, C, V} -> {error, C, V}
 			end,
 
 	{reply, R, S};
 
-handle_call({ranked, Id}, _F, S) ->
-	U = url("matchhistory", "v2.2", Id, [{endIndex, 5}], S),
+handle_call({ranked_ids, Sid}, _F, S) ->
+	U = url("matchhistory", "v2.2", Sid, [{endIndex, 5}], S),
 
 	R = case request(U) of
 				{ok, [{<<"matches">>, ML}]} ->
-					ML2 = lists:sublist(lists:filter(
-																fun(M) ->
-																		Qt = proplists:get_value(<<"queueType">>, M),
-																		is_accepted_queue(Qt)
-																end, ML), ?LIMIT),
+					ML2 = lists:filtermap(
+									fun(M) ->
 
-					[ proplists:get_value(<<"matchId">>, X) || X <- ML2 ];
+											Qt = proplists:get_value(<<"queueType">>, M),
+											case is_accepted_queue(Qt) of
+												true ->
+													{true, match_team_champ(Sid, M)};
+												false -> false
+											end
+
+									end, ML), 
+					lists:sublist(ML2, ?LIMIT);
+
 				{error, C, V} -> {error, C, V}
 			end,
 
@@ -152,7 +180,40 @@ url(Request, Version, Arg, Params, S) ->
 url(Request, Version, Arg, S)->
 	url(Request, Version, Arg, [], S).
 
-is_accepted_queue(<<"CLASSIC">>, X) -> is_accepted_queue(X).
+game_team_champ(Game) ->
+	Tid = proplists:get_value(<<"teamId">>, Game),
+	Cid = proplists:get_value(<<"championId">>, Game),
+	Mid = proplists:get_value(<<"gameId">>, Game),
+	[{team, Tid}, {champion, Cid}, {matchId, Mid}].
+
+match_team_champ(Sid, Match) ->
+	Idents = proplists:get_value(<<"participantIdentities">>, Match),
+	Pid = match_participant_id(Sid, Idents),
+
+	P = match_participant(Pid, proplists:get_value(<<"participants">>, Match)),
+
+	Tid = proplists:get_value(<<"teamId">>, P),
+	Cid = proplists:get_value(<<"championId">>, P),
+	Mid = proplists:get_value(<<"matchId">>, Match),
+
+	[{team, Tid}, {champion, Cid}, {matchId, Mid}].
+
+match_participant(Pid, [P | Rest]) ->
+	case proplists:get_value(<<"participantId">>, P) of
+		Pid -> P;
+		_ -> match_participant(Pid, Rest)
+	end.
+
+match_participant_id(Sid, [P | Rest]) ->
+	Player = proplists:get_value(<<"player">>, P),
+	case proplists:get_value(<<"summonerId">>, Player) of
+		Sid ->
+			proplists:get_value(<<"participantId">>, P);
+		_ -> match_participant_id(Sid, Rest)
+	end.
+
+is_accepted_queue(<<"CLASSIC">>, X) -> is_accepted_queue(X);
+is_accepted_queue(_, _) -> false.
 
 is_accepted_queue(<<"URF">>) -> true;
 is_accepted_queue(<<"CAP_5x5">>) -> true;
