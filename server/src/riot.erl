@@ -147,7 +147,9 @@ request(Url) ->
 						S ->
 							proplists:get_value(<<"message">>, S)
 					end,
-			{error, C, M}
+			{error, C, M};
+		{error, D} ->
+			{error, [D], <<"Network connection issue.">>}
 	end.
 
 start_link() ->
