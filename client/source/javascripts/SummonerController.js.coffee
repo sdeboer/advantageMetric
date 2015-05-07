@@ -29,21 +29,43 @@ class SummonerController
 		@response @$scope.result_b
 
 	response: (result)=>
+		if @$scope.result_a?.$resolved and @$scope.result_b?.$resolved
+			@setCompare()
+
 		requestAnimationFrame =>
 			for g in result.summoner
 				@setSeries g
 
+	setCompare: ->
+		asum = @$scope.result_a.summary
+		bsum = @$scope.result_b.summary
+		a = (asum.count - bsum.count)
+		@$scope.result_a.count_advantage = @advantage a
+		@$scope.result_a.summary.count_compare = a
+
+		a = (asum.average - bsum.average)
+		@$scope.result_a.summary.average_compare = a
+		@$scope.result_a.summary.average_advantage = @advantage a
+
+		a = (asum.sdev - bsum.sdev)
+		@$scope.result_a.summary.sdev_compare = a
+		@$scope.result_a.summary.sdev_advantage = @advantage a
+
+
+	advantage: (a)->
+		a >= 0 ? 'positive' : 'negative'
+
 	setSeries: (game)->
-		# blue is position 0, red is position 11,
+		# blue is position 0, purple is position 11,
 		# players are their participantId
 		series = []
 		totals = []
 		blue = name: "Blue", data: [], color: 'blue', yAxis: 1
-		red = name: "Red", data: [], color: 'red', yAxis: 1
+		Purple = name: "Purple", data: [], color: 'purple', yAxis: 1
 		winner = if game.match.teams[0].winner
 			"Blue"
 		else
-			"Red"
+			"Purple"
 		
 		for streaks in game.streaks
 			for s in streaks
@@ -55,7 +77,7 @@ class SummonerController
 					blue.data.push [x, totals[0]]
 				else
 					current = totals[11] = (totals[11] || 0) + pts
-					red.data.push [x, totals[11]]
+					purple.data.push [x, totals[11]]
 
 				for pid in s.players when pid isnt 0
 					totals[pid] = (totals[pid] || 0) + pts
@@ -79,7 +101,7 @@ class SummonerController
 						series[pid] = visible: visibility, name: name, data: [ point ]
 
 		series[0] = blue
-		series[11] = red
+		series[11] = purple
 
 		champ_score = Math.round((totals[game.pid] / totals[champ_team_pos]) * 100)
 

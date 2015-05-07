@@ -63,7 +63,7 @@
 -define(PRESSURE_RADIUS, 1500).
 
 -define(BLUE_TEAM, 100).
--define(RED_TEAM, 200).
+-define(PURPLE_TEAM, 200).
 
 % Worth Assesment
 -define(WARD_POINTS, 1).
@@ -126,7 +126,7 @@ get_streaks(M) ->
 
 	Bstreaks = lists:foldl(
 							 fun(S, Acc)->
-									 find_streaks(S, Acc, ?RED_TEAM)
+									 find_streaks(S, Acc, ?PURPLE_TEAM)
 							 end, [], Btimes),
 	Bs1 = lists:filtermap(fun streak_clean/1, Bstreaks),
 	Bs2 = lists:sort(fun streak_sort/2, Bs1),
@@ -340,8 +340,8 @@ process_event(E, Acc) ->
 							% The team of the building is the owning team rather than the
 							% attacking team, we'll just reverse that for our purposes.
 							Team = case proplists:get_value(<<"teamId">>, E) of
-											 ?BLUE_TEAM -> ?RED_TEAM;
-											 ?RED_TEAM -> ?BLUE_TEAM
+											 ?BLUE_TEAM -> ?PURPLE_TEAM;
+											 ?PURPLE_TEAM -> ?BLUE_TEAM
 										 end,
 							#time{type = Etype, score = ?BUILDING_POINTS, attackers = [Killer | Assists], team = Team};
 

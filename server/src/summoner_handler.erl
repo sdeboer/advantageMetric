@@ -80,40 +80,6 @@ retrieve(Name, Fn) ->
 	case riot:summoner_id(Name) of
 		{error, C, V} -> {error, C, V};
 		Sid ->
-			[ match_map(M) || M <- Fn(Sid) ]
+			[ advantage:fetch(Sid, M) || M <- Fn(Sid) ]
 	end.
 
-match_map(Match) ->
-	Cid = proplists:get_value(champion, Match),
-	Tid = proplists:get_value(team, Match),
-	Mid = proplists:get_value(matchId, Match),
-
-	M = riot:match(Mid, true),
-
-	Parts = proplists:get_value(<<"participants">>, M),
-	Pid = lookup_pid(Tid, Cid, Parts),
-
-	Streaks = objectives:scores(M),
-
-	[
-	 {match, M},
-	 {pid, Pid},
-	 {streaks, Streaks}
-	].
-
-lookup_pid(Tid, Cid, [P | Prest]) ->
-	case proplists:get_value(<<"teamId">>, P) of
-		Tid ->
-
-			case proplists:get_value(<<"championId">>, P) of
-				Cid ->
-
-					proplists:get_value(<<"participantId">>, P);
-
-				_ ->
-					lookup_pid(Tid, Cid, Prest)
-			end;
-
-		_ ->
-			lookup_pid(Tid, Cid, Prest)
-	end.

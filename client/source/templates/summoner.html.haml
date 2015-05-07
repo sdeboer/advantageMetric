@@ -25,6 +25,19 @@
         .field
           %select(ng-model="b.region" ng-options="o.name for o in active_regions" ng-required="true")
 
+  .summary.left(ng-show="result_a")
+    .data.count
+      %span.value {{ result_a.summary.count }}
+      %span(class="compare {{ result_a.summary.count_advantage }}") {{ result_a.summary.count_compare }}
+    .data.average
+      %span.value {{ result_a.summary.average }}
+      %span(class="compare {{ result_a.summary.average_advantage }}") {{ result_a.summary.average_compare }}
+    .data.sdev
+      %span.value {{ result_a.summary.sdev }}
+      %span(class="compare {{ result_a.summary.sdev_advantage }}") {{ result_a.summary.sdev_compare }}
+
+  .summary.right(ng-show="result_b")
+
   .section.a.left
     .match(ng-repeat="match in result_a.base")
       .streak(data-match-id="{{ match.match.matchId }}")

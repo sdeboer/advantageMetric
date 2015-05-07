@@ -1,4 +1,5 @@
 -module(riot).
+-include("match_ids.hrl").
 
 -behaviour(gen_server).
 
@@ -66,7 +67,7 @@ handle_call({summoner, Name}, _F, S) ->
 
 handle_call({recent_list, Id}, _F, S) ->
 	Arg = lists:flatten( io_lib:format("~p/recent", [Id]) ),
-	U = url("game/by-summoner", "v1.3", Arg, [{endIndex, 5}], S),
+	U = url("game/by-summoner", "v1.3", Arg, [{endIndex, ?LIMIT}], S),
 	case request(U) of
 		{ok, Res} ->
 			{reply, Res, S};
@@ -78,24 +79,23 @@ handle_call({recent_list, Id}, _F, S) ->
 
 handle_call({recent_ids, Sid}, _F, S) ->
 	Arg = lists:flatten( io_lib:format("~p/recent", [Sid]) ),
-	U = url("game/by-summoner", "v1.3", Arg, [{endIndex, 5}], S),
+	U = url("game/by-summoner", "v1.3", Arg, [{endIndex, ?LIMIT}], S),
 
 	R = case request(U) of
 				{ok, Res} ->
 					GL = proplists:get_value(<<"games">>, Res),
-					GL2 = lists:filtermap(
-									fun(G) ->
+					lists:filtermap(
+						fun(G) ->
 
-											Gm = proplists:get_value(<<"gameMode">>, G),
-											St = proplists:get_value(<<"subType">>, G),
-											case is_accepted_queue(Gm, St) of
-												true ->
-													{true, game_team_champ(G)};
-												false -> false
-											end
+								Gm = proplists:get_value(<<"gameMode">>, G),
+								St = proplists:get_value(<<"subType">>, G),
+								case is_accepted_queue(Gm, St) of
+									true ->
+										{true, game_team_champ(G)};
+									false -> false
+								end
 
-									end, GL),
-					lists:sublist(GL2, ?LIMIT);
+						end, GL);
 
 				{error, C, V} -> {error, C, V}
 			end,
@@ -103,22 +103,21 @@ handle_call({recent_ids, Sid}, _F, S) ->
 	{reply, R, S};
 
 handle_call({ranked_ids, Sid}, _F, S) ->
-	U = url("matchhistory", "v2.2", Sid, [{endIndex, 5}], S),
+	U = url("matchhistory", "v2.2", Sid, [{endIndex, ?LIMIT}], S),
 
 	R = case request(U) of
 				{ok, [{<<"matches">>, ML}]} ->
-					ML2 = lists:filtermap(
-									fun(M) ->
+					lists:filtermap(
+						fun(M) ->
 
-											Qt = proplists:get_value(<<"queueType">>, M),
-											case is_accepted_queue(Qt) of
-												true ->
-													{true, match_team_champ(Sid, M)};
-												false -> false
-											end
+								Qt = proplists:get_value(<<"queueType">>, M),
+								case is_accepted_queue(Qt) of
+									true ->
+										{true, match_team_champ(Sid, M)};
+									false -> false
+								end
 
-									end, ML), 
-					lists:sublist(ML2, ?LIMIT);
+						end, ML);
 
 				{error, C, V} -> {error, C, V}
 			end,
@@ -140,7 +139,12 @@ handle_call({match, Id, Timeline}, _F, S) ->
 request(Url) ->
 	case restc:request(get, Url) of
 		{ok, 200, _H, V} -> {ok, V};
+		{ok, 404, _H, _D} -> {error, 404, <<"not found">>};
 		{ok, C, _H, Data} ->
+			% I think this actually needs to do a string
+			% parse of the HTML returned in order to figure
+			% out what the message is...It is not presented
+			% as a proplist.
 			M = case proplists:get_value(<<"status">>, Data) of
 						undefined ->
 							<<"no message">>;
@@ -186,7 +190,10 @@ game_team_champ(Game) ->
 	Tid = proplists:get_value(<<"teamId">>, Game),
 	Cid = proplists:get_value(<<"championId">>, Game),
 	Mid = proplists:get_value(<<"gameId">>, Game),
-	[{team, Tid}, {champion, Cid}, {matchId, Mid}].
+	#match_ids{
+		 champion = Cid,
+		 match = Mid,
+		 team = Tid }.
 
 match_team_champ(Sid, Match) ->
 	Idents = proplists:get_value(<<"participantIdentities">>, Match),
@@ -197,8 +204,10 @@ match_team_champ(Sid, Match) ->
 	Tid = proplists:get_value(<<"teamId">>, P),
 	Cid = proplists:get_value(<<"championId">>, P),
 	Mid = proplists:get_value(<<"matchId">>, Match),
-
-	[{team, Tid}, {champion, Cid}, {matchId, Mid}].
+	#match_ids{
+		 champion = Cid,
+		 match = Mid,
+		 team = Tid }.
 
 match_participant(Pid, [P | Rest]) ->
 	case proplists:get_value(<<"participantId">>, P) of
