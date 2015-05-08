@@ -16,6 +16,9 @@ start() ->
 	ok = application:start(asn1),
 	ok = application:start(public_key),
 	ok = application:start(ssl),
+	ok = application:start(idna),
+	ok = application:start(hackney),
+	ok = application:start(couchbeam),
 	ok = application:start(advantage_server),
 	lager:info("advantage_server started"),
 	ok.

@@ -1,0 +1,4 @@
+data/log/*
+data/run/*
+data/couchDB/*
+*.dump
