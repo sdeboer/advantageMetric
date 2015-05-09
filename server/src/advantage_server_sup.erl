@@ -14,6 +14,8 @@ start_link() ->
 
 init([]) ->
 	Children = [
+							?CHILD(document),
+							?CHILD(map_reduce),
 							?CHILD(riot),
 							?CHILD(objectives),
 							?CHILD(advantage)
