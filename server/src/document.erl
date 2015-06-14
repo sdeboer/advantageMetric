@@ -15,11 +15,10 @@
 -export([
 				 id/0, id/1,
 				 save/1,
-				 get/1, get/2
+				 load/1, load/2,
+				 stats/0, info/0
 				 %delete/1
 				]).
-
-% Views
 
 -define(DEFAULT_URL, "http://localhost:5984").
 -define(DEFAULT_DB, "advantage").
@@ -34,13 +33,19 @@ id() -> id(1).
 id(N) ->
 	gen_server:call(?MODULE, {new_id, N}).
 
+stats() ->
+	gen_server:call(?MODULE, stats).
+
+info() ->
+	gen_server:call(?MODULE, info).
+
 save(D) ->
 	gen_server:call(?MODULE, {save, D}).
 
-get(Id) ->
-	get(Id, []).
+load(Id) ->
+	load(Id, []).
 
-get(Id, Args) ->
+load(Id, Args) ->
 	gen_server:call(?MODULE, {retrieve, Id, Args}).
 
 start_link() ->
@@ -79,20 +84,36 @@ init(Opts) ->
 					 end,
 
 	Server = couchbeam:server_connection(Url, Args),
-	{ok, Database} = couchbeam:open_or_create_db(Server, DB, DBargs),
+	{ok, Database} = case couchbeam:open_or_create_db(Server, DB, DBargs) of
+							 {ok, D2} -> {ok, D2};
+							 {error, R} ->
+								 lager:error("Problem connection to CouchDB ~p / ~p", [R, Url]),
+								 {error, R}
+						 end,
 
 	{ok, #state{server = Server, database = Database} }.
 
 stop() ->
 	gen_server:cast(?MODULE, stop).
 
+handle_call(info, _F, S) ->
+	R = couchbeam:db_info(S#state.database),
+	{reply, R, S};
+
+handle_call(stats, _F, S) ->
+	R = couchbeam:stats(S#state.database),
+	{reply, R, S};
+
 handle_call({new_id, N}, _From, S) ->
 	UU = couchbeam:get_uuids(S#state.server, N),
 	{reply, UU, S};
 
 handle_call({save, D}, _From, S) ->
-	{ok, {D2} } = couchbeam:save_doc(S#state.database, {D}),
-	{reply, D2, S};
+	Doc = case couchbeam:save_doc(S#state.database, {D}) of
+					{ok, {D2} } ->  D2;
+					Error -> Error
+				end,
+	{reply, Doc, S};
 
 handle_call({retrieve, Id, Args}, _From, S) ->
 	Resp = case couchbeam:open_doc(S#state.database, Id, Args) of

@@ -11,13 +11,20 @@
 				 handle_call/3, handle_cast/2, handle_info/2
 				]).
 
+% Construction and maintenance
+
 -export([
 				 design/1, design/2,
 				 make/1, make/2,
+				 save/1,
 				 set_map/3, set_reduce/3
 				]).
 
 % Views
+
+-export([
+				 view/2, view/3
+				]).
 
 -define(DEFAULT_URL, "http://localhost:5984").
 -define(DEFAULT_DB, "advantage").
@@ -49,7 +56,7 @@ make(Design, Language) ->
 design(Name) -> design(Name, ?DEFAULT_LANGUAGE).
 
 design(Name, Language) ->
-	case document:get(design_id(Name)) of
+	case document:load(design_id(Name)) of
 		undefined -> make(Name, Language);
 		V -> V
 	end.
@@ -59,6 +66,15 @@ set_map(Name, Function, Design) ->
 
 set_reduce(Name, Function, Design) ->
 	set_view_subset(?REDUCE_LABEL, Name, Function, Design).
+
+save(Design) ->
+	document:save(Design).
+
+view(DesignName, ViewName) ->
+	gen_server:call(?MODULE, {view, DesignName, ViewName, []}).
+
+view(DesignName, ViewName, Options) ->
+	gen_server:call(?MODULE, {view, DesignName, ViewName, Options}).
 
 set_view_subset(Sub, Name, Function, Design) ->
 	Fn = list_to_binary(Function),
