@@ -37,6 +37,8 @@
 					victims = []
 				 }).
 
+-define(FINAL_TYPE, <<"final">>).
+
 -define(R2P(Record),
 				record_to_proplist(#Record{} = Rec) ->
 						Z = lists:zip(
@@ -93,7 +95,7 @@ handle_call({streaks, Match}, _F, S) ->
 	{reply, get_streaks(Match), S}.
 
 get_streaks(M) ->
-	Timeline = proplists:get_value(<<"timeline">>, M),
+	{Timeline} = proplists:get_value(<<"timeline">>, M),
 	Frames = proplists:get_value(<<"frames">>, Timeline, []),
 	Times = lists:foldl(fun process_frame/2, [], Frames),
 	T2 = lists:sort(fun(A,B) ->
@@ -130,9 +132,13 @@ get_streaks(M) ->
 							 end, [], Btimes),
 	Bs1 = lists:filtermap(fun streak_clean/1, Bstreaks),
 	Bs2 = lists:sort(fun streak_sort/2, Bs1),
-	[Frames, As2, Bs2].
+	[
+	 {<<"frames">>, Frames},
+	 {<<"blue">>, As2},
+	 {<<"red">>, Bs2}
+	].
 
-partition_events(Pid, [P | Rest]) ->
+partition_events(Pid, [{P} | Rest]) ->
 	case proplists:get_value(<<"participantId">>, P) of
 		Pid ->
 			proplists:get_value(<<"teamId">>, P, undefined) =:= ?BLUE_TEAM;
@@ -140,8 +146,21 @@ partition_events(Pid, [P | Rest]) ->
 			partition_events(Pid, Rest)
 	end.
 
+binary_match_id(M) ->
+	Mid = proplists:get_value(<<"matchId">>, M),
+	list_to_binary( integer_to_list( Mid) ).
+
 process(M) ->
-	[Frames, Blue, Red] = get_streaks(M),
+	Fid = binary_match_id(M),
+	case document:load(?FINAL_TYPE, Fid) of
+		undefined ->
+			Final = calculate_final(M),
+			document:create(?FINAL_TYPE, Fid, Final);
+	Fd -> Fd
+	end.
+
+calculate_final(M) ->
+	Streaks = get_streaks(M),
 	Players = proplists:get_value(<<"participantIdentities">>, M),
 	Participants = proplists:get_value(<<"participants">>, M),
 
@@ -153,11 +172,19 @@ process(M) ->
 											 proplists:get_value(team, P) }
 								 end, S2),
 
+	Frames = proplists:get_value(<<"frames">>, Streaks),
+
+	Blue = proplists:get_value(<<"blue">>, Streaks),
 	Blue2 = add_pressuring_players(Frames, TeamLookup, Blue),
-	Red2 = add_pressuring_players(Frames, TeamLookup, Red),
 	Blue3 = [ record_to_proplist(S) || S <- Blue2 ],
+
+	Red = proplists:get_value(<<"red">>, Streaks),
+	Red2 = add_pressuring_players(Frames, TeamLookup, Red),
 	Red3 = [ record_to_proplist(S) || S <- Red2 ],
-	[Blue3, Red3].
+	[
+	 {<<"blue">>, Blue3},
+	 {<<"red">>, Red3}
+	].
 
 add_pressuring_players(Frames, TeamLookup, Streaks) ->
 	lists:map(fun(S) ->
@@ -177,7 +204,7 @@ get_participants(Frame) ->
 
 streak_position([], _, S) -> S;
 
-streak_position([F | Rest], TeamLookup, S) ->
+streak_position([{F} | Rest], TeamLookup, S) ->
 	T1 = S#streak.start - ?PRESSURE_GAP,
 	T2 = S#streak.finish + ?PRESSURE_GAP,
 	FT = proplists:get_value(<<"timestamp">>, F),
@@ -274,7 +301,7 @@ is_local(A, B) ->
 			 ),
 	D =< ?PRESSURE_RADIUS.
 
-process_player(Pdata) ->
+process_player({Pdata}) ->
 	Pid = proplists:get_value(<<"participantId">>, Pdata),
 
 	[Sid, Name] = case proplists:get_value(<<"player">>, Pdata) of
@@ -291,7 +318,7 @@ process_player(Pdata) ->
 	 { position, undefined }
 	].
 
-add_teams(Scores, P) ->
+add_teams(Scores, {P}) ->
 	Team = proplists:get_value(<<"teamId">>, P),
 	Pid = proplists:get_value(<<"participantId">>, P),
 
@@ -303,14 +330,14 @@ add_teams(Scores, P) ->
 											end
 									end, Scores).
 
-process_frame(Frame, Acc) ->
+process_frame({Frame}, Acc) ->
 	case proplists:get_value(<<"events">>, Frame, undefined) of
 		undefined -> Acc;
 		Events ->
-			lists:foldl(fun(E, A) -> process_event(E, A) end, Acc, Events)
+			lists:foldl(fun process_event/2, Acc, Events)
 	end.
 
-process_event(E, Acc) ->
+process_event({E}, Acc) ->
 	Assists = proplists:get_value(<<"assistingParticipantsId">>, E, []),
 	Killer = proplists:get_value(<<"killerId">>, E, undefined),
 

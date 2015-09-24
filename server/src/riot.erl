@@ -31,6 +31,8 @@
 -define(PATH, "api/lol/").
 -define(LIMIT, 3).
 
+-define(MATCH_TYPE, <<"match">>).
+
 summoner_id(Name) ->
 	gen_server:call(?MODULE, {summoner, Name}).
 
@@ -125,16 +127,35 @@ handle_call({ranked_ids, Sid}, _F, S) ->
 	{reply, R, S};
 
 handle_call({match, Id, Timeline}, _F, S) ->
+	% Need to deal with whether or not we have the
+	% timeline already.
+
+	Bid = list_to_binary( integer_to_list( Id ) ),
+	R = case document:load(?MATCH_TYPE, Bid) of
+				undefined ->
+
+					lager:debug("Retrieving from Riot ~p", [Id]),
+					case retrieve_match(Id, Timeline, S) of
+						{ok, M} ->
+							document:create(?MATCH_TYPE, Bid, M);
+
+						Err -> Err
+					end;
+
+				Match ->
+					lager:debug("cached ~p", [Id]),
+					Match
+			end,
+
+	{reply, R, S}.
+
+retrieve_match(Id, Timeline, S) ->
 	P = case Timeline of
 				true -> [{"includeTimeline", "true"}];
 				_ -> []
 			end,
 	U = url("match", "v2.2", Id, P, S),
-	R = case request(U) of
-				{ok, M} -> M;
-				X -> X
-			end,
-	{reply, R, S}.
+	request(U).
 
 request(Url) ->
 	case restc:request(get, Url) of

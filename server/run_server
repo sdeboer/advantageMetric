@@ -1,6 +1,10 @@
 #!/bin/sh
-
-# Potential ENV vars, defaults are set in advantage_server.app.src
+#
+# Mandatory ENV vars
+#
+# RIOT_API_KEY
+#
+# Optional ENV vars, defaults are set in advantage_server.app.src
 # SESSION_COOKIE (c_session)
 # PORT (10100)
 # CLIENT_DOMAIN (team.psiinteractive.com)

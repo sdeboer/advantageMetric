@@ -14,6 +14,7 @@
 % Construction and maintenance
 
 -export([
+				 load_maps/0,
 				 design/1, design/2,
 				 make/1, make/2,
 				 save/1,
@@ -31,7 +32,8 @@
 
 -record(state, {
 					server,
-					database
+					database,
+					views
 				 }).
 
 -define(DEFAULT_LANGUAGE, "erlang").
@@ -39,10 +41,12 @@
 -define(MAP_LABEL, <<"map">>).
 -define(REDUCE_LABEL, <<"reduce">>).
 
+load_maps() ->
+	gen_server:cast(?MODULE, load_maps).
+
 design_id(Design) ->
 	B1 = <<"_design/">>,
-	B2 = list_to_binary(Design),
-	<<B1/binary, B2/binary>>.
+	<<B1/binary, Design/binary>>.
 
 make(Design) -> make(Design, ?DEFAULT_LANGUAGE).
 
@@ -76,9 +80,7 @@ view(DesignName, ViewName) ->
 view(DesignName, ViewName, Options) ->
 	gen_server:call(?MODULE, {view, DesignName, ViewName, Options}).
 
-set_view_subset(Sub, Name, Function, Design) ->
-	Fn = list_to_binary(Function),
-	Nm = list_to_binary(Name),
+set_view_subset(Sub, Nm, Fn, Design) ->
 	{Views} = proplists:get_value(?VIEW_LABEL, Design),
 	View = case proplists:get_value(Nm, Views) of
 					 undefined -> [];
@@ -91,8 +93,8 @@ set_view_subset(Sub, Name, Function, Design) ->
 
 handle_call({view, Design, View, Opts}, _F, S) ->
 	Resp = case couchbeam_view:fetch(S#state.database, {Design, View}, Opts) of
-					 {ok, View} -> View;
-					 {error, Condition} -> {error, Condition}
+					 {ok, V} -> V;
+					 Err -> Err
 				 end,
 
 	{reply, Resp, S}.
@@ -133,15 +135,46 @@ init(Opts) ->
 						 O2 -> O2
 					 end,
 
+	ViewBase = case proplists:get_value(view_base, Opts) of
+							 undefined ->
+								 case os:getenv("VIEW_BASE_DIR") of
+									 false ->
+										 {ok, B} = application:get_env(view_base),
+										 B;
+									 B -> B
+								 end;
+							 B -> B
+						 end,
+
+
 	Server = couchbeam:server_connection(Url, Args),
 	{ok, Database} = couchbeam:open_or_create_db(Server, DB, DBargs),
 
-	{ok, #state{server = Server, database = Database} }.
+	{ok, #state{server = Server, database = Database, views = ViewBase } }.
 
 stop() ->
 	gen_server:cast(?MODULE, stop).
 
-handle_cast(_Message, S) -> {noreply, S}.
+handle_cast(load_maps, S) ->
+	Base = [S#state.views, "/"],
+	L = length( lists:flatten(Base) ) + 1,
+	Glob = [Base, "**/*.map.erl"],
+	R = filelib:wildcard(Glob),
+	load_map(R, L),
+	{noreply, S}.
+
+load_map([], _L) -> ok;
+
+load_map([N|Rest], L) ->
+	{ok, Bin} = file:read_file(N),
+	N2 = string:substr(N, L),
+	[Dname, V] = re:split(N2, "/"),
+	[Vname, []] = re:replace(V, ".map.erl", ""),
+	Design = design(Dname),
+	D2 = set_map(Vname, Bin, Design),
+	document:save(D2),
+	load_map(Rest, L).
+
 
 handle_info(_Message, S) -> {noreply, S}.
 

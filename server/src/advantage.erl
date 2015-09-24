@@ -17,16 +17,10 @@
 				 code_change/3
 				]).
 
-
 fetch(Sid, Mid) ->
 	gen_server:call(?MODULE, {fetch, Sid, Mid}).
 
 handle_call({fetch, _Sid, Mid}, _F, S) ->
-	%% see if match ID already in storage, if so
-	%% get the data from there and then process it
-	%% for this particular SID.
-	%%
-	%% Else get the data from riot and then process it.
 	Cid = Mid#match_ids.champion,
 	Tid = Mid#match_ids.team,
 	Mid = Mid#match_ids.match,
